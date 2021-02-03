@@ -1,0 +1,272 @@
+---
+title: "MOODS MÚSICAIS"
+author: "Duarte Silveira - 57255"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    fig_caption: yes
+    number_sections: yes
+    toc_depth: 4
+  html_document:
+    toc_depth: '4'
+    df_print: paged
+  bookdown::pdf_book:
+    base_format: rticles::jss_article
+
+header-includes:
+- \usepackage[utf8]{inputenc}
+- \usepackage[T1]{fontenc}
+- \usepackage{textcomp}
+- \usepackage[portuguese]{babel}
+- \usepackage{dcolumn}
+geometry: margin=1in
+subtitle: Estatística Multivariada
+fontsize: 12pt
+---
+
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE, comment=NA)
+options(future.globals.maxSize = 4000 * 1024^5)
+```
+
+<style>
+body {
+text-align: justify
+font-family: Times New Roman
+line-height: 1.5;
+}
+</style>
+
+\centering
+
+\thispagestyle{empty}
+
+\vspace{5in}
+
+\includegraphics[width=0.2\textwidth]{logofct}
+
+\raggedright
+\clearpage\thispagestyle{empty}
+\tableofcontents
+
+\newpage
+
+# Introdução 
+É cada vez maior a exigência dos utilizados das plataformas streaming de músicas, queremos a musica certa no momento certo e que os algoritmos nos conheçam melhor muitas vezes que nos mesmos. Neste trabalho prático pretendo resolver um problema que a mim enquanto músico me afeta particularmente, o sobreajustamento das plataformas de stremming aos meus gostos e preferências e não adequação das recomendações de novas músicas, sendo que, por exemplo o Spotify segmenta as recomendações pelo género e gostaria de ter algo mais parecido com a app Idagio, recomendações com base em moods, mas não apenas para músicas clássicas. Assim, decidi realizar este estudo onde se pretende criar uma organização de musicas com base nas suas semelhanças, estudando a sua relação e proximidade tendo por base um conjunto de variáveis. Para esse efeito irei utilizar o K-means, um método de clustering não-hierarquico, reduzindo a dimensionalidade através de uma análise de componentes principais. No final do estudo espero conseguir obter um conjunto de clusters representando um conjunto de moods musicais.
+
+
+# Descrição do Dataset
+O data set escolhido denominado como “spotify.csv” contém mais de 170000 canções recolhidas através da Web API do Spotify, neste ficheiro existem também dados agrupados por artista, ano, ou género contudo, não usarei esses ficheiros, dado que o meu objetivo de estudo é independente dessas variáveis. As variáveis são:
+
+\begin{itemize}
+	\item Variável Primária:
+        \subitem id (Id da música gerado pelo Spotify)
+	\item Variáveis numéricas:
+	      \subitem acustica (Variável contínua de 0 a 1)
+        \subitem dancabilidade (Variável contínua de 0 a 1)
+        \subitem energia (Variável contínua de 0 a 1)
+        \subitem duração-ms (O comprimento da música em milissegundos (ms)) instrumental (Variável contínua de 0 a 1)
+        \subitem valência (Variável contínua de 0 a 1)
+        \subitem popularidade (Variável discreta de 0 a 100)
+        \subitem tempo (Variável contínua de 50 a 150)
+        \subitem vivacidade (Variável contínua de 0 a 1)
+        \subitem ruído (Variável contínua de -60 e 0)
+        \subitem Falabilidade (Variável contínua de 0 a 1)
+        \subitem ano (Variável discreta de 1921 a 2020)
+  \item Variáveis Binárias:
+        \subitem modo (0 = Menor, 1 = Maior)
+        \subitem explícito (0 = Sem conteúdo explícito, 1 = Conteúdo explícito)
+  \item Variáveis Categóricas:
+        \subitem Chave (Todas as chaves em oitava codificadas como valores que vão de 0 a 11, começando em Dó como 0, Ré como 1 e assim por diante)
+        \subitem Artistas (Lista de artistas mencionados)
+        \subitem Data de lançamento (Data de lançamento principalmente em formato aaaaa-mm-dd, embora a precisão da data possa variar)
+        \subitem Nome (Nome da canção)
+\end{itemize}
+
+
+# Descrição das metodologias usadas
+A metodologia escolhida para levar a cabo o objetivo de classificar musicas em diferentes k moods que é a análise de clusters não-hierárquica com redução de dimensionalidade através de uma Análise de componentes principais (ACP). Primeiramente, tinha equacionado realizar uma análise de clusters com métodos hierárquicos mas rapidamente concluí que dada a dimensão do dataset isso não seria viável. Assim, utilizarei o K-means (método não-hierárquico) por forma a agrupar diferentes músicas com base na sua semelhança entre si. Com a segunda metodologia, a ACP, pretende-se primeiramente realizar um teste à sua adequabilidade e se é possível reduzir o conjunto de variáveis iniciais preservando ao máximo possível a sua dispersão.
+\par
+Para a realizacao do projeto, primeiramente irei limpar as variáveis que não contribuem para o meu objetivo em análise como o ano, conteúdo explícito, popularidade, os artistas e a data de lançamento. Em seguida irei standardizar e transformar todas as variáveis dada as suas diferentes heterogeneidades, posteriormente, irei realizar um estudo da adequabilidade de uma análise de componentes principais e ver se se justifica ou não retirar algumas das variáveis inicialmente escolhidas. Por fim, reunidas todas as condições realizar uma análise com o método não-hierárquico K-means por forma a agrupar as músicas com base na sua semelhança, o número de clusters ótimo será analisado através do método Elbow e o método Silhouette.
+\par
+
+
+## Análise de Componentes Principais (ACP)
+### Adequabilidade da ACP
+Antes de efetuar uma ACP é frequente realizar um estudo da sua adequabilidade. Pelo que inicialmente analisarei a matriz das correlações entre as variaveis
+originais, contudo esta condição não é suficiente pelo irei ainda proceder à análise da matriz de correlações parciais, dadas para p = 3 por:
+\begin{align}
+r_{x,y|z}= \frac {r_{xy} - r_{yz}r_{xz}}{\sqrt{1-r_{yz}^2}\sqrt{1-r_{zx}^2}}
+\end{align}
+Sendo que os seus valores quanticam a contribuição unitária de cada variável para a variância total. Por fim, realizarei um teste de esfericidade (Mauchly), onde se pretende testar a hipótese de a matriz de correlações ser igual à matriz identidade, isto é se as variáveis são independentes e têm a mesma variância. Dada a estatística de teste (U*) definida por:
+\begin{align}
+U*=-(n-1 - \frac{2p^2+p+2}{6p}) lnU \ com \ \  U=\Lambda^{2/n} \ \  \Lambda = \frac{|S|^{n/2}}{(tr(S)/p)^{np/2}} \ \  U=\frac{p^p|S|}{(tr(S))^p}
+\end{align}
+
+
+###PCA
+A ideia geral de uma análise em componentes principais (ACP) aplicada neste estudo é encontrar uma rotação e uma projeção dos dados iniciais que permita reter tanto quanto possível a variação e dispersão dos dados, reduzindo a nossa dimensão de p para k (com k menor que p). Esta seleção será baseada no critério de Keiser que, mediante variáveis padronizadas, retém as componentes principais (CP) com valor próprio superior a 1.
+\par 
+As variâncias das componentes têm valores decrescentes para $k = 1,...,p$, i.e.,
+$var(a'_1x) \geq  var(a_2'x) \geq ... \geq  var (a'_px)$ correspondentes aos valores proprios $l_k$ , da matriz de covariancias $S$. Sendo a proporção da variancia total original explicada por cada uma das CP e dada por:
+\begin{align}
+  \frac{l_k}{\sum_{k=1}^p var(y_k)}
+\end{align}
+
+
+## Análise Não-Hierárquica
+A escolha pelo K-Means (método de clustering não-hierárquico) pareceu-me desde logo a mais adequada dado o tamanho do dataset e as características do problema que pretendo endereçar. Este método consiste em dividir os n exemplos por k grupos previamente definidos, e é ideal para datasets com grandes dimensoes como neste caso. 
+\par
+Neste procedimento, os k centroides são usados como método de agregação aos pontos mais próximos, à distancia d obtida pela distância euclideana. Por outras palavras, pretende-se agrupar músicas nos diferentes moods musicais. Este algoritmo é bom para clusters globulares com dispersão semelhante, contudo, uma desvantagem deste método é que o k número de clusters tem de ser definido apriori. Devido à natureza desta tarefa ser exploratória, irei realizar uma análise com o método Elbow e com o método Silhouette para diferentes número de clusters para encontrar um número ótimo de clusters pela minimização da variabilidade intragrupo e maximização da consistência dentro dos clusters.
+
+
+### Método Silhouette
+Consite em encontrar para cada k clusters distintos, a distância média entre cada objeto i e os restantes membros do mesmo cluster e a menor distância média entre cada objeto i e os membros dos clusters que não o contém, sendo dado por:
+\begin{align}
+   s_i  = \frac{b_i-a_i}{max(b_i,a_i)}
+\end{align}
+A solução ótima, segundo este método, corresponderá à média mais elevada apresentada no gráfico correspondente.
+
+### Método Elbow
+Consiste em encontrar o numero ótimo de clusters através minimização da variabilidade intragrupo, Within Sum of Squares dada por:
+
+\begin{align}
+    WSS_j  = \sum_{j=1}^{n_j} (x_{ij}-\bar{x}_j)'(x_{ij}-\bar{x}_j)) \ \ (j=1,...k)
+\end{align}
+
+Através da fórmula acima podemos então calcular a variabilidade intragrupo considerando diferentes k números de clusters, escolhendo o valor que está no cotovelo do grafico obtido.
+
+
+# Resultados
+### Importar o dataset
+Primeiramente, por forma a obter os dados, importei o dataset descrito anteriormente e decidi eliminar algumas variaveis que não contribuiam para o objetivo em estudo de agrupar músicas de acordo com o mood dos utilizadores no momento, nomeadamente:
+
+\begin{itemize}
+	\item id (Id da música do Spotify);
+	\item ano (Variável discreta de 1921 a 2020);
+	\item modo (0 = Menor, 1 = Maior);
+	\item popularidade (Variável discreta de 0 a 100)
+  \item explícito (0 = Sem conteúdo explícito, 1 = Conteúdo explícito);
+  \item Chave (Todas as chaves em oitava codificadas como valores que vão de 0 a 11, começando em Dó como 0, Ré como 1 e assim por diante...);
+  \item Artistas (Lista de artistas mencionados);
+  \item Data de lançamento (Data de lançamento principalmente em formato aaaaa-mm-dd, embora a precisão da data possa variar);
+  \item Duração (em ms);
+  \item Nome (Nome da canção)
+\end{itemize}
+
+```{r echo=FALSE,results=FALSE}
+#Importar todo o conjunto de dados 
+dados_raw <- read.csv('~/Desktop/EM/PROJETO/spotify.csv', header = T)
+#Eliminar variaveis que não contribuem para o estudo 
+dados <- subset(dados_raw, 
+                select = -c(year, artists, popularity,duration_ms,explicit,id,key,mode,name,release_date))
+summary<-summary(dados);summary
+```
+
+
+O passo seguinte passou por padronizar os dados, dado que observando os dados permite-nos desde logo perceber a necessidade de o fazer devido às diferentes heterogeneidades nomeadamente da variável ruído e tempo. 
+
+```{r echo=FALSE,results=FALSE}
+library(stargazer)
+stargazer(dados,type = "text")
+```
+
+```{r echo=FALSE, results=FALSE}
+dados_scaled <- scale(dados,center = TRUE,scale = TRUE)
+```
+
+## Redução de Dimensionalidade 
+### PCA
+Mesmo após excluir manulamente as variáveis que não são úteis para o objetivo em estudo, 9 dimensões acarreta ainda uma grande complexidade ao problema. Por isso, realizei um estudo da adequabilidade de uma análise de componentes principais, conforme descrito para reduzir a dimensionalidade preservando ao máximo a dispersão original dos dados.
+
+```{r echo=FALSE, results=FALSE}
+##ESTUDO DA ADEQUABILIDADE DA ACP
+S=cov(dados_scaled)
+R=S;R # como os dados foram padronizadas a matriz de correlacoes e igual a de covariancias
+#Análise da matriz de correlações 
+(sum(R>=0.5)-6)/(nrow(S)^2-6)
+#Como é menor que 0.25 indica que não possui correlações elevadas
+#Análise das correlações parciais
+library(corpcor)
+pR=cor2pcor(R)
+(sum(pR<0.5)-6)/(nrow(S)^2-6) ### acima de 0.5 #significa que devemos prosseguir com a ACP
+#teste de esfericidade
+dados<-as.matrix(dados)
+class(dados)
+mauchly.test(lm(dados~1)) #dados tipo matriz
+#rejeitamos a nossa hipotese nula, não temos evidências que a nossa matriz de correlações é a matriz identidade, assim podemos prosseguir com a ACP. Haverá alguma das correlações que será significamente diferente de 0
+
+```
+
+Analisando a matriz de correlações bivariadas concluí que as variáveis não possuem efetivamente correlações elevadas, contudo, esta condição não é suficiente para descartar a realização de uma ACP. Analizando correlações parciais, indica uma correlação parcial superior a 0.5 pelo que devemos prosseguir com uma ACP e por fim pela análise do teste de mauchly, conclui-se que rejeito a nossa hipótese nula e não temos evidências que a nossa matriz de correlações é a matriz identidade, assim podemos prosseguir com a ACP, este indicador diz-nos que algumas das correlações serão significamente diferentes de 0.
+
+
+```{r echo=FALSE, results=FALSE, screeplot, fig.cap = "Screeplot- relaciona os valores proprios com as CP", fig.height = 3, fig.width = 5}
+pca<-prcomp(x=dados_scaled,center = TRUE,scale.= TRUE)
+summary(pca)
+pca$sdev
+screeplot<-screeplot(pca,type = "l");screeplot
+```
+
+
+Conforme descrito anteriormente, após realizar a análise de componentes principais, retemos segundo o critério de Keiser e apoiado pelo screeplot da figura 1. as variáveis com um valor próprio superior a 1. Assim sendo, retemos as 3 primeiras componentes principais relativas às variáveis valência, acustica e danceabilidade. Depois da ACP estamos em condições para prosseguir para o clustering com o algoritmo K-means. 
+
+```{r echo=FALSE, results=FALSE}
+dados_scaled_pca <- dados_scaled[,1:3]
+```
+
+## Clustering
+### K-means
+Por forma a obter uma estimativa do número ótimo de clusters, realizei uma análise com base no metodo Elbow (Figura 2.) e o método de Silhouette (Figura 3). Devido ao tamanho do dataset e às capacidades limitadas da minha máquina, reduzi a dimensão do dataset para um conjunto de 10000 amostras, considero um número suficiente para o estudo, que não esgota as capacidades computacionais que possuo.
+
+```{r echo=FALSE, results=FALSE, elbow, fig.cap = "Método Elbow para k entre 1 a 10", fig.height = 2.5, fig.width = 4}
+library(data.table)
+set.seed(123)
+dados_scaled_pca_sample <- data.table(dados_scaled_pca)
+dados_scaled_pca_sample <- dados_scaled_pca_sample[sample(.N, 10000)];dados_scaled_pca_sample
+library(factoextra)
+#ELBOW METHOD
+elbow<- fviz_nbclust(dados_scaled_pca_sample, kmeans, method = "wss");elbow
+```
+
+
+```{r echo=FALSE, results=FALSE, silhouette, fig.cap = "Método Silhouette para k entre 1 a 10", fig.height = 2.5, fig.width = 4}
+#Average Silhouette Method
+silhouette<- fviz_nbclust(dados_scaled_pca_sample, kmeans, method = "silhouette");silhouette
+```
+
+
+Com base nos resultados destes métodos decidi então prosseguir com 4 moods músicais, ajustando então o parâmetro k do método K-means para 4 apriori.
+
+```{r echo=FALSE, results=FALSE, fit_kmeans, fig.cap = "K-means com 4 clusters", fig.height = 3, fig.width = 5}
+#SEED PARA EVITAR ALTERACOES
+set.seed(123)
+fit_kmeans<-kmeans(x = dados_scaled_pca, 4, nstart = 25) 
+fviz_cluster(fit_kmeans, data = dados_scaled_pca,
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw(),
+             show.clust.cent=TRUE
+             )
+#Gerar musicas de clusters aleatórios para atribuir um mood
+sample(fit_kmeans$cluster, 1)
+```
+
+Depois de analisar os clusters formados, possível de observar na figura 4. e algumas músicas de cada cluster, decidi atribuir uma correspondência entre cada cluster e o respetivo mood musical:
+\begin{itemize}
+  \item Triste- Cluster 1 (Exemplo: Natalie Cole: "Someone That I Used To Love")
+  \item Apaixonado- Cluster 2 (Exemplo: The Isley Brothers: "	Sensuality, Pts. 1, 2")
+	\item Delicado- Cluster 3 (Exemplo: Beyonce: "Listen")
+  \item Festivo - Cluster 4 (Exemplo: The Dawn, Tony Orlando: "Tie a Yellow Ribbon Round the Ole Oak Tree")
+\end{itemize}
+
+Para 4 clusters, e visualizando a figura 4. conseguimos observar uma sobreposicao entre eles nao sendo clara a barreira que os separa, contudo, dada as dimensoes e caracteristicas do problema, uma clara separacao entre os clusters nao é uma prioridade máxima dado que uma pessoa pode selecionar o mood Delicado e tocar alguma musica que seja muito semelhante ao cluster Apaixonado, o importante é moods completamente diferentes como triste e festivo produzirem musicas completamente diferentes e efetivamente é possivel observar que essa separação existe entre os clusters 1 e 4.  
+\par
+Depois de definidos os moods e que musicas pretencem a cada mood, só teria de construir o frontend e perante cada mood do utilizador seriam tocadas as músicas do respetivo cluster em vez da tradicional divisão por artista ou por género. Isto cria listas de reprodução muito mais veriadas e ricas musicalmente para o utilizador. Concluo entao que os resultados obtidos são válidos e úteis de acordo com o objetivo em estudo, eventualmente poderia mediante feedback dos utilizadores definir outros clusters e fazer esse ajuste mas do ponto de vista estatístico esta solução com 4 clusters é a que maximiza os parâmetros em estudo.
+
+# Conclusões
+Os resultados práticos são interessantes, contudo existem algumas notas a tirar. Devido à primeira escolha manual de features posso ter enviesado o estudo e, consequentemenete, que os resultados fossem de uma outra natureza bem diferente da produzida neste, isto tanto poderá ter produzido resultados melhores como piores. Uma segunda nota seria que embora o criterio de Keiser dite a eliminação das variáveis com valores próprios inferiores a 1 neste caso devido à pouca correlação existente entre as mesmas a retencao de apenas 3 variáveis possui pouca variabilidade dado que a proporção de variância explicada por essas 3 variaveis é de apenas 62.18% o que é relativamente baixo face a outros estudos já realizados, sendo uma porcentagem considera ótima normalemente em torno de 70% a 90%, isto tambem poderá ter tido consequencias nefastas para os resultados finais. E por fim, do ponto de vista do utilizador penso que 4 moods são limitativos para explicar a variabilidade de sentimentos que o utilizador pode sentir sendo que provavelmente um número maior teria melhores resultados no mundo real. Contudo, perante os testes realizados e que poderão ser ouvidos alguns exemplos acima, acho que o classificador conseguiu uma boa heterogeiniedade entre os clusters (moods) e uma boa homogeinidade dentro do cluster, em termos práticos o que mais acrescenta valor é mesmo a heterogeinidade e diversidade de músicas que estes moods permitem explorar, tendo aplicacoes práticas e comerciais bastante interessantes. 
+
+# Referências bibliográficas
+Johnson, R. and Wichern, D. W. (2007), Applied Multivariate Statistical Analysis, 6th Edition, Prentice Hall, New Jersey
